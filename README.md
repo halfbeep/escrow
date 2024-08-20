@@ -1,6 +1,6 @@
 ## Escrow
 
-**Escrow is 2 party holding contract for the transfer of Ether
+**Escrow is 2 party holding contract for the transfer of Ether using a basic conduit to hold funds on behalf of both parties
 
 ````
 
