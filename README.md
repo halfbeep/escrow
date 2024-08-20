@@ -1,11 +1,11 @@
-## reBot
+## Escrow
 
-**reBot is an attempt to get arbitrage winning on Uniswap, work in progress**
+**Escrow is 2 party holding contract for the transfer of Ether
 
 ````
 
 ### Deploy with forge
 
 ```shell
-$ forge script script/ArbitrageReBot.s.sol:ArbitrageReBotScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+$ forge script script/BasicConduit.s.sol:BasicConduitScript --rpc-url <your_rpc_url> --private-key <your_private_key>
 ````
